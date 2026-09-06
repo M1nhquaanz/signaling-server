@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P CYBER STREAM v1.0</title>
+    <style>
+        :root {
+            --bg-deep: #050509;
+            --bg-panel: rgba(20, 20, 35, 0.75);
+            --neon-primary: #00ffff;
+            --neon-secondary: #bd00ff;
+            --neon-danger: #ff0055;
+            --text-main: #ffffff;
+            --text-muted: #8b8baf;
+            --border-glow: rgba(0, 255, 255, 0.2);
+            --font-stack: 'SF Mono', 'Roboto Mono', Menlo, monospace;
+            --t-pro: cubic-bezier(0.19, 1, 0.22, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+
+        body {
+            font-family: var(--font-stack);
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-image: 
+                linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 25px;
+            background: rgba(10, 10, 20, 0.85);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-glow);
+            z-index: 100;
+        }
+
+        .brand {
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--neon-primary);
+            text-shadow: 0 0 10px var(--neon-primary);
+        }
+
+        .status-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            padding: 5px 15px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 4px;
+            border: 1px solid rgba(0, 255, 255, 0.1);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #555;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .status-dot.connected {
+            background-color: var(--neon-primary);
+            box-shadow: 0 0 10px var(--neon-primary), 0 0 20px var(--neon-primary);
+            animation: pulse 2s infinite;
+        }
+
+        #room-bar {
+            display: flex;
+            gap: 12px;
+            padding: 10px 25px;
+            background: rgba(15, 15, 30, 0.6);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            align-items: center;
+            z-index: 90;
+        }
+
+        .cyber-input {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border-glow);
+            color: var(--neon-primary);
+            padding: 8px 14px;
+            font-family: var(--font-stack);
+            font-size: 0.85rem;
+            border-radius: 4px;
+            letter-spacing: 1px;
+            transition: all 0.3s var(--t-pro);
+        }
+
+        .cyber-input:focus {
+            border-color: var(--neon-primary);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+        }
+
+        .cyber-btn {
+            padding: 8px 18px;
+            font-family: var(--font-stack);
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s var(--t-pro);
+            background: transparent;
+            color: var(--neon-primary);
+            border: 1px solid var(--neon-primary);
+        }
+
+        .cyber-btn:hover:not(:disabled) {
+            background: var(--neon-primary);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-primary);
+        }
+
+        .cyber-btn.sec {
+            color: var(--neon-secondary);
+            border-color: var(--neon-secondary);
+        }
+
+        .cyber-btn.sec:hover:not(:disabled) {
+            background: var(--neon-secondary);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-secondary);
+        }
+
+        .cyber-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            border-color: var(--text-muted);
+            color: var(--text-muted);
+        }
+
+        .main-layout {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #stream-stage {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #stage-placeholder {
+            position: absolute;
+            color: var(--text-muted);
+            text-align: center;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            z-index: 1;
+        }
+
+        #video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            align-content: center;
+            justify-content: center;
+            z-index: 2;
+        }
+
+        .video-card {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: rgba(10, 10, 20, 0.9);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-glow);
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            transition: all 0.3s var(--t-pro);
+        }
+
+        .video-card video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-card.local video:not(.sharing-screen) {
+            transform: scaleX(-1);
+        }
+
+        .video-card .video-label {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 4px;
+            color: var(--neon-primary);
+            border: 1px solid var(--border-glow);
+            letter-spacing: 1px;
+        }
+
+        #chat-panel {
+            width: 300px;
+            background: rgba(10, 10, 20, 0.85);
+            backdrop-filter: blur(15px);
+            border-left: 1px solid var(--border-glow);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        .chat-header {
+            padding: 12px 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            letter-spacing: 1.5px;
+            color: var(--neon-primary);
+            border-bottom: 1px solid var(--border-glow);
+            text-transform: uppercase;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 0.75rem;
+        }
+
+        .chat-msg {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            max-width: 90%;
+        }
+
+        .chat-msg.self { align-self: flex-end; align-items: flex-end; }
+        .chat-msg.other { align-self: flex-start; align-items: flex-start; }
+
+        .chat-author {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+        }
+
+        .chat-bubble {
+            padding: 8px 12px;
+            border-radius: 4px;
+            line-height: 1.4;
+            word-break: break-word;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .chat-msg.self .chat-bubble {
+            background: rgba(0, 255, 255, 0.1);
+            color: var(--neon-primary);
+            border-color: var(--border-glow);
+        }
+
+        .chat-msg.other .chat-bubble {
+            background: rgba(189, 0, 255, 0.1);
+            color: #fff;
+            border-color: rgba(189, 0, 255, 0.3);
+        }
+
+        .chat-input-container {
+            padding: 12px;
+            border-top: 1px solid var(--border-glow);
+            display: flex;
+            gap: 8px;
+        }
+
+        #action-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            padding: 8px 16px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            border-radius: 100px;
+            border: 1px solid var(--border-glow);
+            z-index: 100;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        .control-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 1px solid var(--border-glow);
+            background: rgba(0, 0, 0, 0.5);
+            color: var(--neon-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s var(--t-pro);
+        }
+
+        .control-btn:hover:not(:disabled) {
+            background: var(--neon-primary);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-primary);
+            transform: scale(1.08);
+        }
+
+        .control-btn.active-primary {
+            background: var(--neon-secondary);
+            color: #fff;
+            border-color: var(--neon-secondary);
+            box-shadow: 0 0 15px var(--neon-secondary);
+        }
+
+        .control-btn.active-danger {
+            background: var(--neon-danger);
+            color: #fff;
+            border-color: var(--neon-danger);
+            box-shadow: 0 0 15px var(--neon-danger);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.2;
+            cursor: not-allowed;
+            border-color: #444;
+            color: #444;
+        }
+
+        .control-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 5px var(--neon-primary); }
+            50% { box-shadow: 0 0 15px var(--neon-primary), 0 0 10px var(--neon-secondary); }
+            100% { box-shadow: 0 0 5px var(--neon-primary); }
+        }
+
+        @media (max-width: 768px) {
+            .main-layout { flex-direction: column; }
+            #chat-panel { width: 100%; height: 200px; border-left: none; border-top: 1px solid var(--border-glow); }
+            #room-bar { flex-wrap: wrap; }
+            #action-bar { bottom: 15px; width: 92%; justify-content: space-evenly; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">SYS//STREAM</div>
+        <div class="status-container">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">PRTCL_OFFLINE</span>
+        </div>
+    </header>
+
+    <div id="room-bar">
+        <input type="text" id="roomIdInput" class="cyber-input" placeholder="ROOM_ID..." style="flex: 1;">
+        <button id="joinRoomBtn" class="cyber-btn">JOIN_LINK</button>
+        <button id="createRoomBtn" class="cyber-btn sec">GEN_ROOM</button>
+    </div>
+
+    <div class="main-layout">
+        <div id="stream-stage">
+            <div id="stage-placeholder">
+                <p>// AWAITING CONNECTION _</p>
+                <p style="font-size: 0.7rem; margin-top: 8px; opacity: 0.5;">Enter ROOM_ID or generate a new channel to start protocol</p>
+            </div>
+
+            <div id="video-grid"></div>
+
+            <div id="action-bar">
+                <button id="toggleMicBtn" class="control-btn" disabled title="Mute/Unmute Mic">
+                    <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+                </button>
+                <button id="toggleCamBtn" class="control-btn" disabled title="Toggle Video">
+                    <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                </button>
+                <button id="toggleScreenBtn" class="control-btn" disabled title="Share Screen">
+                    <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><path d="M8 21h8M12 17v4M12 7l-3 3h2v3h2v-3h2l-3-3z"/></svg>
+                </button>
+                <button id="leaveBtn" class="control-btn active-danger" disabled title="Disconnect">
+                    <svg viewBox="0 0 24 24"><path d="M16 17l5-5-5-5M21 12H9M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div id="chat-panel">
+            <div class="chat-header">// SYS_LOG_CHAT</div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="chat-msg other">
+                    <span class="chat-author">SYS_MSG</span>
+                    <div class="chat-bubble">System ready. Establish peer link to transmit telemetry.</div>
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <input type="text" id="chatInput" class="cyber-input" placeholder="TYPE_MSG..." disabled style="flex: 1;">
+                <button id="sendChatBtn" class="cyber-btn" disabled>SEND</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const videoGrid = document.getElementById('video-grid');
+        const stagePlaceholder = document.getElementById('stage-placeholder');
+        const roomIdInput = document.getElementById('roomIdInput');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const leaveBtn = document.getElementById('leaveBtn');
+        const toggleMicBtn = document.getElementById('toggleMicBtn');
+        const toggleCamBtn = document.getElementById('toggleCamBtn');
+        const toggleScreenBtn = document.getElementById('toggleScreenBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendChatBtn = document.getElementById('sendChatBtn');
+
+        let localStream;
+        let screenStream = null;
+        let isSharingScreen = false;
+        let myPeerId = 'usr_' + Math.random().toString(36).substr(2, 5);
+        let currentRoomId = null;
+        const peerConnections = {};
+        
+        const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        const ws = new WebSocket('ws://localhost:8765');
+
+        ws.onopen = () => {
+            statusDot.classList.add('connected');
+            statusText.textContent = 'SIG_SERVER_LINKED';
+            statusText.style.color = 'var(--neon-primary)';
+        };
+
+        ws.onclose = () => {
+            statusDot.classList.remove('connected');
+            statusText.textContent = 'PRTCL_OFFLINE';
+            statusText.style.color = 'var(--text-muted)';
+        };
+
+        ws.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+            switch (data.type) {
+                case 'room-created':
+                    currentRoomId = data.roomId;
+                    roomIdInput.value = data.roomId;
+                    await setupMediaAndRoomUI(data.roomId);
+                    appendChatMessage('SYS_LOG', `ROOM_CREATED: [${data.roomId}]`, false);
+                    break;
+                case 'room-not-found':
+                    alert(`ERR_INVALID_ID: Phòng [${data.roomId}] không tồn tại trên hệ thống!`);
+                    appendChatMessage('SYS_ERR', `Phòng [${data.roomId}] không tồn tại!`, false);
+                    break;
+                case 'user-joined':
+                    initiatePeerConnection(data.peerId, true);
+                    appendChatMessage('SYS_LOG', `PEER_CONNECTED: [${data.peerId}]`, false);
+                    break;
+                case 'offer':
+                    await handleOffer(data.senderId, data.offer);
+                    break;
+                case 'answer':
+                    await handleAnswer(data.senderId, data.answer);
+                    break;
+                case 'candidate':
+                    if (peerConnections[data.senderId]) {
+                        await peerConnections[data.senderId].addIceCandidate(new RTCIceCandidate(data.candidate));
+                    }
+                    break;
+                case 'user-left':
+                    removePeer(data.peerId);
+                    appendChatMessage('SYS_LOG', `PEER_DISCONNECTED: [${data.peerId}]`, false);
+                    break;
+                case 'room-joined':
+                    currentRoomId = data.roomId;
+                    await setupMediaAndRoomUI(data.roomId);
+                    data.existingPeers.forEach(peerId => initiatePeerConnection(peerId, true));
+                    appendChatMessage('SYS_LOG', `JOINED_ROOM: [${data.roomId}]`, false);
+                    break;
+                case 'chat-message':
+                    appendChatMessage(`PEER//${data.senderId.substr(0,4)}`, data.message, false);
+                    break;
+            }
+        };
+
+        async function initLocalStream() {
+            if (!localStream) {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                createVideoCard(myPeerId, localStream, true);
+            }
+        }
+
+        function createVideoCard(peerId, stream, isLocal = false) {
+            stagePlaceholder.style.display = 'none';
+            if (document.getElementById(`card-${peerId}`)) return;
+
+            const card = document.createElement('div');
+            card.className = `video-card ${isLocal ? 'local' : ''}`;
+            card.id = `card-${peerId}`;
+
+            const label = document.createElement('span');
+            label.className = 'video-label';
+            label.textContent = isLocal ? 'LOCAL_FEED' : `PEER//${peerId.substr(0, 4)}`;
+
+            const video = document.createElement('video');
+            video.autoplay = true;
+            video.playsInline = true;
+            if (isLocal) video.muted = true;
+            video.srcObject = stream;
+
+            card.appendChild(label);
+            card.appendChild(video);
+            videoGrid.appendChild(card);
+        }
+
+        function removePeer(peerId) {
+            if (peerConnections[peerId]) {
+                peerConnections[peerId].close();
+                delete peerConnections[peerId];
+            }
+            const card = document.getElementById(`card-${peerId}`);
+            if (card) card.remove();
+
+            if (videoGrid.children.length === 0) {
+                stagePlaceholder.style.display = 'block';
+            }
+        }
+
+        function initiatePeerConnection(peerId, isInitiator) {
+            const pc = new RTCPeerConnection(rtcConfig);
+            peerConnections[peerId] = pc;
+
+            const activeStream = isSharingScreen ? screenStream : localStream;
+            activeStream.getTracks().forEach(track => pc.addTrack(track, activeStream));
+
+            pc.ontrack = (event) => createVideoCard(peerId, event.streams[0], false);
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'candidate',
+                        targetId: peerId,
+                        senderId: myPeerId,
+                        candidate: event.candidate
+                    }));
+                }
+            };
+
+            if (isInitiator) {
+                pc.onnegotiationneeded = async () => {
+                    try {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        ws.send(JSON.stringify({ type: 'offer', targetId: peerId, senderId: myPeerId, offer }));
+                    } catch (e) {}
+                };
+            }
+            return pc;
+        }
+
+        async function handleOffer(senderId, offer) {
+            const pc = initiatePeerConnection(senderId, false);
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            ws.send(JSON.stringify({ type: 'answer', targetId: senderId, senderId: myPeerId, answer }));
+        }
+
+        async function handleAnswer(senderId, answer) {
+            const pc = peerConnections[senderId];
+            if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+
+        function appendChatMessage(author, text, isSelf = false) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `chat-msg ${isSelf ? 'self' : 'other'}`;
+
+            const authorSpan = document.createElement('span');
+            authorSpan.className = 'chat-author';
+            authorSpan.textContent = author;
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'chat-bubble';
+            bubbleDiv.textContent = text;
+
+            msgDiv.appendChild(authorSpan);
+            msgDiv.appendChild(bubbleDiv);
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function sendChatMessage() {
+            const msg = chatInput.value.trim();
+            if (msg && currentRoomId) {
+                ws.send(JSON.stringify({
+                    type: 'chat-message',
+                    roomId: currentRoomId,
+                    senderId: myPeerId,
+                    message: msg
+                }));
+                appendChatMessage('YOU', msg, true);
+                chatInput.value = '';
+            }
+        }
+
+        sendChatBtn.onclick = sendChatMessage;
+        chatInput.onkeypress = (e) => {
+            if (e.key === 'Enter') sendChatMessage();
+        };
+
+        async function toggleScreenShare() {
+            if (!isSharingScreen) {
+                try {
+                    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    const screenTrack = screenStream.getVideoTracks()[0];
+
+                    Object.values(peerConnections).forEach(pc => {
+                        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) sender.replaceTrack(screenTrack);
+                    });
+
+                    const localVideo = document.querySelector(`#card-${myPeerId} video`);
+                    if (localVideo) {
+                        localVideo.srcObject = screenStream;
+                        localVideo.classList.add('sharing-screen');
+                    }
+
+                    screenTrack.onended = () => stopScreenShare();
+                    isSharingScreen = true;
+                    toggleScreenBtn.classList.add('active-primary');
+                } catch (err) {}
+            } else {
+                stopScreenShare();
+            }
+        }
+
+        function stopScreenShare() {
+            if (!isSharingScreen) return;
+            const cameraTrack = localStream.getVideoTracks()[0];
+
+            Object.values(peerConnections).forEach(pc => {
+                const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) sender.replaceTrack(cameraTrack);
+            });
+
+            const localVideo = document.querySelector(`#card-${myPeerId} video`);
+            if (localVideo) {
+                localVideo.srcObject = localStream;
+                localVideo.classList.remove('sharing-screen');
+            }
+
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+                screenStream = null;
+            }
+
+            isSharingScreen = false;
+            toggleScreenBtn.classList.remove('active-primary');
+        }
+
+        toggleScreenBtn.onclick = toggleScreenShare;
+
+        createRoomBtn.onclick = () => {
+            ws.send(JSON.stringify({ type: 'create-room', peerId: myPeerId }));
+        };
+
+        joinRoomBtn.onclick = () => {
+            const roomId = roomIdInput.value.trim().toUpperCase();
+            if (roomId) {
+                ws.send(JSON.stringify({ type: 'join-room', roomId, peerId: myPeerId }));
+            }
+        };
+
+        async function setupMediaAndRoomUI(roomId) {
+            try {
+                await initLocalStream();
+
+                statusText.textContent = `LINKED_ROOM: ${roomId}`;
+
+                leaveBtn.disabled = false;
+                toggleMicBtn.disabled = false;
+                toggleCamBtn.disabled = false;
+                toggleScreenBtn.disabled = false;
+                chatInput.disabled = false;
+                sendChatBtn.disabled = false;
+                joinRoomBtn.disabled = true;
+                createRoomBtn.disabled = true;
+                roomIdInput.disabled = true;
+            } catch (err) {
+                alert("ERR_NO_MEDIA: Camera or Microphone access denied.");
+            }
+        }
+
+        leaveBtn.onclick = () => {
+            if (isSharingScreen) stopScreenShare();
+
+            if (currentRoomId) {
+                ws.send(JSON.stringify({ type: 'leave-room', roomId: currentRoomId, peerId: myPeerId }));
+            }
+            Object.keys(peerConnections).forEach(peerId => removePeer(peerId));
+    
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            videoGrid.innerHTML = '';
+            stagePlaceholder.style.display = 'block';
+
+            statusText.textContent = 'PRTCL_TERMINATED';
+            currentRoomId = null;
+            leaveBtn.disabled = true;
+            toggleMicBtn.disabled = true;
+            toggleCamBtn.disabled = true;
+            toggleScreenBtn.disabled = true;
+            chatInput.disabled = true;
+            sendChatBtn.disabled = true;
+            joinRoomBtn.disabled = false;
+            createRoomBtn.disabled = false;
+            roomIdInput.disabled = false;
+            roomIdInput.value = '';
+        };
+
+        toggleMicBtn.onclick = () => {
+            if (localStream) {
+                const track = localStream.getAudioTracks()[0];
+                if (track) {
+                    track.enabled = !track.enabled;
+                    toggleMicBtn.classList.toggle('active-danger', !track.enabled);
+                }
+            }
+        };
+
+        toggleCamBtn.onclick = () => {
+            if (localStream) {
+                const track = localStream.getVideoTracks()[0];
+                if (track) {
+                    track.enabled = !track.enabled;
+                    toggleCamBtn.classList.toggle('active-danger', !track.enabled);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
