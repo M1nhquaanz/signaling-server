@@ -4,7 +4,7 @@ import logging
 import os
 import random
 import string
-import websockets
+from aiohttp import web
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,130 +27,165 @@ async def handle_user_leave(room_id, peer_id):
         return
 
     room_peers = rooms[room_id]
-    room_peers.discard(peer_id)
+    if peer_id in room_peers:
+        del room_peers[peer_id]
 
     leave_msg = json.dumps({"type": "user-left", "peerId": peer_id})
-    for remaining_peer_id in list(room_peers):
-        target_ws = clients.get(remaining_peer_id)
-        if target_ws and target_ws.open:
-            await target_ws.send(leave_msg)
+    for p_id, p_info in list(room_peers.items()):
+        ws = p_info["ws"]
+        if not ws.closed:
+            await ws.send_str(leave_msg)
 
     if not room_peers:
         del rooms[room_id]
+        logging.info(f"Room destroyed: {room_id}")
 
-async def handler(websocket):
+async def get_active_rooms_payload():
+    room_list = []
+    for r_id, peers in rooms.items():
+        room_list.append({
+            "id": r_id,
+            "peerCount": len(peers),
+            "name": f"Room {r_id}"
+        })
+    return json.dumps({"type": "rooms-list", "rooms": room_list})
+
+async def healthcheck_handler(request):
+    return web.json_response({
+        "status": "online",
+        "active_rooms": len(rooms),
+        "total_clients": len(clients)
+    }, status=200)
+
+async def websocket_handler(request):
+    ws = web.WebSocketResponse(heartbeat=20.0)
+    await ws.prepare(request)
+
     client_peer_id = None
+    current_room_id = None
+
     try:
-        async for message in websocket:
-            try:
-                data = json.loads(message)
-            except json.JSONDecodeError:
-                continue
-
-            msg_type = data.get("type")
-
-            if msg_type == "create-room":
-                client_peer_id = data.get("peerId")
-                if not client_peer_id:
+        async for msg in ws:
+            if msg.type == web.WSMsgType.TEXT:
+                try:
+                    data = json.loads(msg.data)
+                except json.JSONDecodeError:
                     continue
 
-                new_room_id = generate_unique_room_id()
-                rooms[new_room_id] = {client_peer_id}
-                clients[client_peer_id] = websocket
+                msg_type = data.get("type")
 
-                logging.info(f"Room created: {new_room_id} by Peer: {client_peer_id}")
-                await websocket.send(json.dumps({
-                    "type": "room-created",
-                    "roomId": new_room_id
-                }))
+                if msg_type == "get-rooms":
+                    payload = await get_active_rooms_payload()
+                    await ws.send_str(payload)
 
-            elif msg_type == "join-room":
-                client_peer_id = data.get("peerId")
-                room_id = data.get("roomId")
+                elif msg_type == "create-room":
+                    client_peer_id = data.get("peerId")
+                    username = data.get("username", "Anonymous")
 
-                if not client_peer_id or not room_id:
-                    continue
+                    if not client_peer_id:
+                        continue
 
-                if room_id not in rooms:
-                    await websocket.send(json.dumps({
-                        "type": "room-not-found",
-                        "roomId": room_id
+                    current_room_id = generate_unique_room_id()
+                    rooms[current_room_id] = {
+                        client_peer_id: {"ws": ws, "username": username}
+                    }
+                    clients[client_peer_id] = {
+                        "ws": ws, "username": username, "room_id": current_room_id
+                    }
+
+                    logging.info(f"Room Created: {current_room_id} by {username} ({client_peer_id})")
+                    await ws.send_str(json.dumps({
+                        "type": "room-created",
+                        "roomId": current_room_id
                     }))
-                    continue
 
-                room_peers = rooms[room_id]
-                existing_peers = list(room_peers)
+                elif msg_type == "join-room":
+                    client_peer_id = data.get("peerId")
+                    room_id = data.get("roomId")
+                    username = data.get("username", "Anonymous")
 
-                room_peers.add(client_peer_id)
-                clients[client_peer_id] = websocket
+                    if not client_peer_id or not room_id:
+                        continue
 
-                logging.info(f"Peer {client_peer_id} joined room {room_id}")
+                    if room_id not in rooms:
+                        await ws.send_str(json.dumps({
+                            "type": "room-not-found",
+                            "roomId": room_id
+                        }))
+                        continue
 
-                await websocket.send(json.dumps({
-                    "type": "room-joined",
-                    "roomId": room_id,
-                    "existingPeers": existing_peers
-                }))
+                    current_room_id = room_id
+                    room_peers = rooms[room_id]
+                    existing_peers = list(room_peers.keys())
 
-                join_msg = json.dumps({
-                    "type": "user-joined",
-                    "peerId": client_peer_id
-                })
-                for existing_peer_id in existing_peers:
-                    target_ws = clients.get(existing_peer_id)
-                    if target_ws and target_ws.open:
-                        await target_ws.send(join_msg)
+                    await ws.send_str(json.dumps({
+                        "type": "room-joined",
+                        "roomId": room_id,
+                        "existingPeers": existing_peers
+                    }))
 
-            elif msg_type in ("offer", "answer", "candidate"):
-                target_id = data.get("targetId")
-                target_ws = clients.get(target_id)
-                if target_ws and target_ws.open:
-                    await target_ws.send(json.dumps(data))
+                    join_msg = json.dumps({
+                        "type": "user-joined",
+                        "peerId": client_peer_id,
+                        "username": username
+                    })
+                    for p_id, p_info in room_peers.items():
+                        target_ws = p_info["ws"]
+                        if not target_ws.closed:
+                            await target_ws.send_str(join_msg)
 
-            elif msg_type == "chat-message":
-                room_id = data.get("roomId")
-                sender_id = data.get("senderId")
-                room_peers = rooms.get(room_id, set())
+                    room_peers[client_peer_id] = {"ws": ws, "username": username}
+                    clients[client_peer_id] = {
+                        "ws": ws, "username": username, "room_id": room_id
+                    }
 
-                chat_msg = json.dumps(data)
-                for peer_id in list(room_peers):
-                    if peer_id != sender_id:
-                        target_ws = clients.get(peer_id)
-                        if target_ws and target_ws.open:
-                            await target_ws.send(chat_msg)
+                    logging.info(f"Peer {username} ({client_peer_id}) joined room {room_id}")
 
-            elif msg_type == "leave-room":
-                room_id = data.get("roomId")
-                peer_id = data.get("peerId")
-                if room_id and peer_id:
-                    await handle_user_leave(room_id, peer_id)
+                elif msg_type in ("offer", "answer", "candidate"):
+                    target_id = data.get("targetId")
+                    if target_id in clients:
+                        target_ws = clients[target_id]["ws"]
+                        if not target_ws.closed:
+                            await target_ws.send_str(json.dumps(data))
 
-    except websockets.exceptions.ConnectionClosed:
-        pass
-    except Exception as e:
-        logging.error(f"Unexpected connection error: {e}")
+                elif msg_type == "chat-message":
+                    room_id = data.get("roomId")
+                    sender_id = data.get("senderId")
+                    if room_id in rooms:
+                        chat_payload = json.dumps(data)
+                        for p_id, p_info in rooms[room_id].items():
+                            if p_id != sender_id and not p_info["ws"].closed:
+                                await p_info["ws"].send_str(chat_payload)
+
+                elif msg_type == "leave-room":
+                    room_id = data.get("roomId")
+                    peer_id = data.get("peerId")
+                    if room_id and peer_id:
+                        await handle_user_leave(room_id, peer_id)
+                        clients.pop(peer_id, None)
+
+            elif msg.type in (web.WSMsgType.ERROR, web.WSMsgType.CLOSED):
+                break
+
     finally:
         if client_peer_id:
             clients.pop(client_peer_id, None)
-            for room_id, peers in list(rooms.items()):
-                if client_peer_id in peers:
-                    await handle_user_leave(room_id, client_peer_id)
+            if current_room_id:
+                await handle_user_leave(current_room_id, client_peer_id)
 
-async def main():
-    port = int(os.environ.get("PORT", 8765))
-    
-    async with websockets.serve(
-        handler, 
-        "0.0.0.0", 
-        port,
-        ping_interval=20,
-        ping_timeout=20
-    ):
-        logging.info(f"Signaling Server running on port {port}")
-        await asyncio.Future()
+    return ws
+
+def create_app():
+    app = web.Application()
+    app.router.add_get("/", healthcheck_handler)
+    app.router.add_get("/ping", healthcheck_handler)
+    app.router.add_get("/healthcheck", healthcheck_handler)
+    app.router.add_get("/ws", websocket_handler)
+    app.router.add_get("/ws/", websocket_handler)
+    return app
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logging.info("Server stopping...")
+    port = int(os.environ.get("PORT", 8765))
+    app = create_app()
+    logging.info(f"Signaling & Keep-Alive Server starting on port {port}")
+    web.run_app(app, host="0.0.0.0", port=port)
