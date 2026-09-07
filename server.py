@@ -6,6 +6,8 @@ import random
 import string
 from aiohttp import web
 
+PORT = int(os.environ.get("PORT", 8765))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -34,7 +36,10 @@ async def handle_user_leave(room_id, peer_id):
     for p_id, p_info in list(room_peers.items()):
         ws = p_info["ws"]
         if not ws.closed:
-            await ws.send_str(leave_msg)
+            try:
+                await ws.send_str(leave_msg)
+            except Exception:
+                pass
 
     if not room_peers:
         del rooms[room_id]
@@ -50,6 +55,21 @@ async def get_active_rooms_payload():
         })
     return json.dumps({"type": "rooms-list", "rooms": room_list})
 
+@web.middleware
+async def cors_middleware(request, handler):
+    if request.method == "OPTIONS":
+        response = web.Response(status=204)
+    else:
+        try:
+            response = await handler(request)
+        except web.HTTPException as ex:
+            response = ex
+
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
+
 async def healthcheck_handler(request):
     return web.json_response({
         "status": "online",
@@ -58,7 +78,7 @@ async def healthcheck_handler(request):
     }, status=200)
 
 async def websocket_handler(request):
-    ws = web.WebSocketResponse(heartbeat=20.0)
+    ws = web.WebSocketResponse(heartbeat=25.0, max_msg_size=4*1024*1024)
     await ws.prepare(request)
 
     client_peer_id = None
@@ -74,7 +94,11 @@ async def websocket_handler(request):
 
                 msg_type = data.get("type")
 
-                if msg_type == "get-rooms":
+                if msg_type == "ping":
+                    await ws.send_str(json.dumps({"type": "pong"}))
+                    continue
+
+                elif msg_type == "get-rooms":
                     payload = await get_active_rooms_payload()
                     await ws.send_str(payload)
 
@@ -129,10 +153,14 @@ async def websocket_handler(request):
                         "peerId": client_peer_id,
                         "username": username
                     })
-                    for p_id, p_info in room_peers.items():
+                    
+                    for p_id, p_info in list(room_peers.items()):
                         target_ws = p_info["ws"]
                         if not target_ws.closed:
-                            await target_ws.send_str(join_msg)
+                            try:
+                                await target_ws.send_str(join_msg)
+                            except Exception:
+                                pass
 
                     room_peers[client_peer_id] = {"ws": ws, "username": username}
                     clients[client_peer_id] = {
@@ -141,21 +169,37 @@ async def websocket_handler(request):
 
                     logging.info(f"Peer {username} ({client_peer_id}) joined room {room_id}")
 
+                elif msg_type == "rejoin-room":
+                    client_peer_id = data.get("peerId")
+                    room_id = data.get("roomId")
+                    username = data.get("username", "Anonymous")
+
+                    if room_id in rooms and client_peer_id:
+                        current_room_id = room_id
+                        rooms[room_id][client_peer_id] = {"ws": ws, "username": username}
+                        clients[client_peer_id] = {"ws": ws, "username": username, "room_id": room_id}
+
                 elif msg_type in ("offer", "answer", "candidate"):
                     target_id = data.get("targetId")
                     if target_id in clients:
                         target_ws = clients[target_id]["ws"]
                         if not target_ws.closed:
-                            await target_ws.send_str(json.dumps(data))
+                            try:
+                                await target_ws.send_str(json.dumps(data))
+                            except Exception:
+                                pass
 
                 elif msg_type == "chat-message":
                     room_id = data.get("roomId")
                     sender_id = data.get("senderId")
                     if room_id in rooms:
                         chat_payload = json.dumps(data)
-                        for p_id, p_info in rooms[room_id].items():
+                        for p_id, p_info in list(rooms[room_id].items()):
                             if p_id != sender_id and not p_info["ws"].closed:
-                                await p_info["ws"].send_str(chat_payload)
+                                try:
+                                    await p_info["ws"].send_str(chat_payload)
+                                except Exception:
+                                    pass
 
                 elif msg_type == "leave-room":
                     room_id = data.get("roomId")
@@ -167,6 +211,8 @@ async def websocket_handler(request):
             elif msg.type in (web.WSMsgType.ERROR, web.WSMsgType.CLOSED):
                 break
 
+    except Exception as e:
+        logging.error(f"WebSocket error: {e}")
     finally:
         if client_peer_id:
             clients.pop(client_peer_id, None)
@@ -176,7 +222,7 @@ async def websocket_handler(request):
     return ws
 
 def create_app():
-    app = web.Application()
+    app = web.Application(middlewares=[cors_middleware])
     app.router.add_get("/", healthcheck_handler)
     app.router.add_get("/ping", healthcheck_handler)
     app.router.add_get("/healthcheck", healthcheck_handler)
@@ -185,7 +231,5 @@ def create_app():
     return app
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8765))
     app = create_app()
-    logging.info(f"Signaling & Keep-Alive Server starting on port {port}")
-    web.run_app(app, host="0.0.0.0", port=port)
+    web.run_app(app, host="0.0.0.0", port=PORT)
