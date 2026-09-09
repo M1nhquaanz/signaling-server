@@ -101,4 +101,4 @@ async def ping(ctx):
     ping_ms = round((end_time - start_time) * 1000)
     await message.edit(content=f"Pong! **{ping_ms}ms** (WebSocket: `{round(bot.latency * 1000)}ms`)")
 
-bot.run('discordvcl')
+bot.run(os.getenv('DISCORD_TOKEN'))
