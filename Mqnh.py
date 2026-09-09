@@ -101,4 +101,4 @@ async def ping(ctx):
     ping_ms = round((end_time - start_time) * 1000)
     await message.edit(content=f"Pong! **{ping_ms}ms** (WebSocket: `{round(bot.latency * 1000)}ms`)")
 
-bot.run('MTU0NzI1ODM0NzY1OTU5MTg1MA.GMpoJw.uxaG_RWmKbYamGOTNLB5xM1bdeDx6VWwxU5dAI')
+bot.run('MTU0NzI1ODM0NzY1OTU5MTg1MA.GksMrY.V3WsuBWJZ5ruccKIrGQk7YD4x9Gur28Zd4aYxk')
