@@ -8,7 +8,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-WELCOME_CHANNEL_ID = 123456789012345678  
+WELCOME_CHANNEL_ID = 1479386186157133884 
 
 @bot.event
 async def on_ready():
@@ -101,4 +101,4 @@ async def ping(ctx):
     ping_ms = round((end_time - start_time) * 1000)
     await message.edit(content=f"Pong! **{ping_ms}ms** (WebSocket: `{round(bot.latency * 1000)}ms`)")
 
-bot.run('MTU0NzI1ODM0NzY1OTU5MTg1MA.GtzQR7.743sCerGFFPaOcZJi_uXrOCGbwH-KozX8ASqAc')
+bot.run('MTU0NzI1ODM0NzY1OTU5MTg1MA.GsrVs8.6hE8vpe8a4xgpg0-VjidjPMQF-453OJ3HQB9mo')
