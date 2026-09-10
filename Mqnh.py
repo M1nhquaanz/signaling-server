@@ -101,6 +101,7 @@ async def helpme(ctx):
         name="⚙️ Danh sách lệnh",
         value=(
             "`!ping` - Kiểm tra bot còn hoạt động.\n"
+            "`!test` - Chạy thử nghiệm gửi thông báo vào/ra server.\n"
             "`!helpme` - Hiển thị hướng dẫn này."
         ),
         inline=False
@@ -116,5 +117,11 @@ async def ping(ctx):
 
     ping_ms = round((end_time - start_time) * 1000)
     await message.edit(content=f"Pong! **{ping_ms}ms** (WebSocket: `{round(bot.latency * 1000)}ms`)")
+
+@bot.command(name="test")
+async def test(ctx):
+    await ctx.send("🧪 **Đang kích hoạt test giao diện...**")
+    bot.dispatch("member_join", ctx.author)
+    bot.dispatch("member_remove", ctx.author)
 
 bot.run(os.getenv('DISCORD_TOKEN'))
