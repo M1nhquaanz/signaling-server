@@ -1,7 +1,9 @@
+import os
 import time
+from aiohttp import web
 import discord
 from discord.ext import commands
-import os
+
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -10,8 +12,22 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 WELCOME_CHANNEL_ID = 1479386186157133884 
 
+async def handle_ping(request):
+    return web.Response(text="Bot is alive!")
+
+async def start_fake_port():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"Fake HTTP server running on port {port}")
+
 @bot.event
 async def on_ready():
+    await start_fake_port()
     print(f"Bot đã sẵn sàng với tên: {bot.user.name}")
 
 @bot.event
@@ -55,7 +71,7 @@ async def on_member_remove(member):
 
     avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
     embed.set_thumbnail(url=avatar_url)
-    
+
     guild_icon = member.guild.icon.url if member.guild.icon else None
     embed.set_footer(
         text=f"{member.guild.name} • Còn lại {len(member.guild.members)} thành viên", 
@@ -70,7 +86,7 @@ async def helpme(ctx):
         title="🎉 BOT CHÀO MỪNG 🎉",
         color=discord.Color.from_rgb(88, 101, 242)
     )
-    
+
     embed.add_field(
         name="📋 Tính năng chính",
         value=(
@@ -80,7 +96,7 @@ async def helpme(ctx):
         ),
         inline=False
     )
-    
+
     embed.add_field(
         name="⚙️ Danh sách lệnh",
         value=(
@@ -97,7 +113,7 @@ async def ping(ctx):
     start_time = time.monotonic()
     message = await ctx.send("Pong! Calculating...")
     end_time = time.monotonic()
-    
+
     ping_ms = round((end_time - start_time) * 1000)
     await message.edit(content=f"Pong! **{ping_ms}ms** (WebSocket: `{round(bot.latency * 1000)}ms`)")
 
